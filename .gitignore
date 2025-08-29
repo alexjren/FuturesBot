@@ -1,0 +1,7 @@
+/.env
+/30m.json
+/account_value.png
+/daily.json
+/data_handler.log
+/venv
+/__pycache__
