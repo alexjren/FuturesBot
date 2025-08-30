@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sqlite3
 
-from config import DB_PATH, INIT_ACCOUNT_VALUE, TICKERS
+from config import DB_PATH, INIT_ACCOUNT_VALUE, TICKERS, TIMEFRAMES
 
 def build_series(df: pd.DataFrame) -> pd.Series:
     if df.empty or "timestamp" not in df.columns or "account_value" not in df.columns:
@@ -21,7 +21,7 @@ def build_series(df: pd.DataFrame) -> pd.Series:
 
     return s
 
-def plot_account_value(db_path: str = DB_PATH, *, multiplier: int = 1, timestep: str = "day"):
+def plot_account_value(db_path: str = DB_PATH):
     parser = argparse.ArgumentParser(description="Plot per-ticker account value vs time with % on secondary axis.")
     parser.add_argument("--file", type=str, default=db_path, help="Path to JSON data file (default from config).")
     parser.add_argument("--tickers", type=str, nargs="*", default=None, help="Subset of tickers to plot (default: all in file or config.TICKERS).")
@@ -37,42 +37,43 @@ def plot_account_value(db_path: str = DB_PATH, *, multiplier: int = 1, timestep:
 
     connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
-    timeframe = f"{multiplier}{timestep[0].upper()}"
 
-    fig, ax = plt.subplots(layout='constrained')
+    for timeframe in TIMEFRAMES:
+        fig, ax = plt.subplots(layout='constrained')
 
-    if args.tickers:
-        tickers = args.tickers
-    else:
-        tickers = TICKERS
+        if args.tickers:
+            tickers = args.tickers
+        else:
+            tickers = TICKERS
 
-    for ticker in tickers:
-        data = cursor.execute("SELECT timestamp, account_value FROM signals WHERE ticker = ? AND timeframe = ? ORDER BY timestamp ASC", (ticker, timeframe)).fetchall()
-        df = pd.DataFrame(data, columns=['timestamp', 'account_value'])
+        for ticker in tickers:
+            data = cursor.execute("SELECT timestamp, account_value FROM signals WHERE ticker = ? AND timeframe = ? ORDER BY timestamp ASC", (ticker, timeframe)).fetchall()
+            df = pd.DataFrame(data, columns=['timestamp', 'account_value'])
 
-        try:
-            plot_df = build_series(df)
-        except Exception:
-            #logger.error(f"{ticker}: error in build_series", exc_info=True)
-            continue
+            try:
+                plot_df = build_series(df)
+            except Exception:
+                #logger.error(f"{ticker}: error in build_series", exc_info=True)
+                continue
+            
+            ax.plot(plot_df.index, plot_df.values, label=ticker)
+
+        ax.set_title(args.title)
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Account Value")
         
-        ax.plot(plot_df.index, plot_df.values, label=ticker)
+        def dollar2percent(x):
+            return (x / INIT_ACCOUNT_VALUE - 1) * 100
+        
+        def percent2dollar(x): 
+            return (x / 100 + 1)* INIT_ACCOUNT_VALUE
 
-    ax.set_title(args.title)
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Account Value")
-    
-    def dollar2percent(x):
-        return (x / INIT_ACCOUNT_VALUE - 1) * 100
-    
-    def percent2dollar(x): 
-        return (x / 100 + 1)* INIT_ACCOUNT_VALUE
+        secax = ax.secondary_yaxis("right", functions=(dollar2percent, percent2dollar))
+        secax.set_ylabel("Percent Gain/Loss")
 
-    secax = ax.secondary_yaxis("right", functions=(dollar2percent, percent2dollar))
-    secax.set_ylabel("Percent Gain/Loss")
-
-    ax.legend()
-    fig.savefig("account_value.png", dpi=300, bbox_inches="tight")
+        ax.legend()
+        fig.savefig(f"account_value_{timeframe}.png", dpi=300, bbox_inches="tight")
+        plt.clf()
     
     connection.commit()
     connection.close()

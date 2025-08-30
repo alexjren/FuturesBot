@@ -18,6 +18,8 @@ API_KEY = os.getenv("API_KEY")
 
 # TICKERS = ["X:BTCUSD","X:ETHUSD", "C:EURUSD", "C:GBPUSD", "C:USDJPY", "I:NDX"]
 TICKERS = ["I:NDX"]
+# TIMEFRAMES = ["1 minute", "5 minute", "15 minute", "30 minute", "1 hour", "4 hour", "1 day"]
+TIMEFRAMES = ["30 minute", "1 day"]
 DB_PATH = "market.db"
 ATR_PERIOD = 20
 ENTRY_PERIOD = 20

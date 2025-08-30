@@ -1,7 +1,7 @@
 /.env
-/30m.json
-/account_value.png
-/daily.json
+/account_value_1 day.png
+/daily.json_30 minute.png
 /data_handler.log
+/market.db
 /venv
 /__pycache__

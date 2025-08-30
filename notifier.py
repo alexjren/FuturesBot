@@ -3,30 +3,29 @@ import pandas as pd
 import numpy as np
 import sqlite3
 from datetime import datetime
-from config import DISCORD_WEBHOOK_URL, DB_PATH, TICKERS
+from config import DISCORD_WEBHOOK_URL, DB_PATH, TICKERS, TIMEFRAMES
 
 def _fmt(x):
         if x is None or (isinstance(x, float) and np.isnan(x)):
             return "n/a"
         return f"{float(x):.4f}".rstrip("0").rstrip(".")
 
-def build_discord_message(db_path: str = DB_PATH, *, multiplier: int = 1, timestep: str = "day"):
+def build_discord_message(db_path: str = DB_PATH):
     connection = sqlite3.connect(db_path)
     cursor = connection.cursor()
-    timeframe = f"{multiplier}{timestep[0].upper()}"
-
     messages = []
-    for ticker in TICKERS:
-        last_ts = cursor.execute(f"SELECT MAX(timestamp) FROM signals WHERE ticker = ? AND timeframe = ?", (ticker, timeframe)).fetchone()[0]
-        signal = cursor.execute("SELECT signal, entry_price, stop_price, target_price FROM signals WHERE ticker = ? AND timeframe = ? AND timestamp = ?", (ticker, timeframe, last_ts)).fetchone()
-        sig = (signal[0] or "").strip().lower()
-        entry = signal[1]
-        stop = signal[2]
-        targ = signal[3]
-        if sig in ("long", "short") and pd.notna(entry):
-            messages.append(f"**{ticker}**: {sig.capitalize()} at {_fmt(entry)}, stop {_fmt(stop)}, target {_fmt(targ)}")
-        else:
-            messages.append(f"**{ticker}**: No signal for next bar")
+    for timeframe in TIMEFRAMES:
+        for ticker in TICKERS:
+            last_ts = cursor.execute(f"SELECT MAX(timestamp) FROM signals WHERE ticker = ? AND timeframe = ?", (ticker, timeframe)).fetchone()[0]
+            signal = cursor.execute("SELECT signal, entry_price, stop_price, target_price FROM signals WHERE ticker = ? AND timeframe = ? AND timestamp = ?", (ticker, timeframe, last_ts)).fetchone()
+            sig = (signal[0] or "").strip().lower()
+            entry = signal[1]
+            stop = signal[2]
+            targ = signal[3]
+            if sig in ("long", "short") and pd.notna(entry):
+                messages.append(f"**{ticker}**, {timeframe}: {sig.capitalize()} at {_fmt(entry)}, stop {_fmt(stop)}, target {_fmt(targ)}")
+            else:
+                messages.append(f"**{ticker}**, {timeframe}: No signal for next bar")
     connection.close()
     return messages
 
@@ -65,15 +64,18 @@ def post_discord(messages):
     return response
 
 def post_image(image_path: str = "account_value.png", caption: str = "Account Value Backtest"):
-    with open(image_path, "rb") as f:
-        files = {"file": (image_path, f)}
-        payload = {"content": caption}
-        response = requests.post(DISCORD_WEBHOOK_URL, data=payload, files=files)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as e:
-            print(f"Failed to send image to Discord: {e} - {response.text}")
-            raise
+    for timeframe in TIMEFRAMES:
+        image_path = f"account_value_{timeframe}.png"
+        caption = f"Account Value Backtest - {timeframe}"
+        with open(image_path, "rb") as f:
+            files = {"file": (image_path, f)}
+            payload = {"content": caption}
+            response = requests.post(DISCORD_WEBHOOK_URL, data=payload, files=files)
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as e:
+                print(f"Failed to send image to Discord: {e} - {response.text}")
+                raise
     return response
 
 def send_discord_message(db_path: str = DB_PATH):
