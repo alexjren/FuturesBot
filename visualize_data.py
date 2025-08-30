@@ -2,9 +2,9 @@ import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import sqlite3
 
-from data_handler import _load_json
-from config import FILE_PATH, INIT_ACCOUNT_VALUE
+from config import DB_PATH, INIT_ACCOUNT_VALUE, TICKERS
 
 def build_series(df: pd.DataFrame) -> pd.Series:
     if df.empty or "timestamp" not in df.columns or "account_value" not in df.columns:
@@ -21,9 +21,9 @@ def build_series(df: pd.DataFrame) -> pd.Series:
 
     return s
 
-def plot_account_value(file_path: str = FILE_PATH,):
+def plot_account_value(db_path: str = DB_PATH, *, multiplier: int = 1, timestep: str = "day"):
     parser = argparse.ArgumentParser(description="Plot per-ticker account value vs time with % on secondary axis.")
-    parser.add_argument("--file", type=str, default=file_path, help="Path to JSON data file (default from config).")
+    parser.add_argument("--file", type=str, default=db_path, help="Path to JSON data file (default from config).")
     parser.add_argument("--tickers", type=str, nargs="*", default=None, help="Subset of tickers to plot (default: all in file or config.TICKERS).")
     parser.add_argument("--mode", type=str, choices=["all", "common", "from-date"], default="all",
                         help="Start mode: 'all' (each from own start), 'common' (earliest common), 'from-date' (use --date).")
@@ -35,26 +35,20 @@ def plot_account_value(file_path: str = FILE_PATH,):
 
     args = parser.parse_args()
 
-    data = _load_json(args.file)
+    connection = sqlite3.connect(DB_PATH)
+    cursor = connection.cursor()
+    timeframe = f"{multiplier}{timestep[0].upper()}"
+
     fig, ax = plt.subplots(layout='constrained')
 
-    # Determine tickers to plot
     if args.tickers:
         tickers = args.tickers
     else:
-        # Prefer config.TICKERS if set; else all keys in JSON
-        tickers = list(data.keys())
+        tickers = TICKERS
 
     for ticker in tickers:
-        rows = data.get(ticker, [])
-        if not isinstance(rows, list) or not rows:
-            #logger.info(f"{ticker}: no rows to process; skipping.")
-            continue
-    
-        df = pd.DataFrame(rows)
-        if "timestamp" not in df.columns:
-            #logger.warning(f"{ticker}: missing 'timestamp' column; skipping.")
-            continue
+        data = cursor.execute("SELECT timestamp, account_value FROM signals WHERE ticker = ? AND timeframe = ? ORDER BY timestamp ASC", (ticker, timeframe)).fetchall()
+        df = pd.DataFrame(data, columns=['timestamp', 'account_value'])
 
         try:
             plot_df = build_series(df)
@@ -79,6 +73,9 @@ def plot_account_value(file_path: str = FILE_PATH,):
 
     ax.legend()
     fig.savefig("account_value.png", dpi=300, bbox_inches="tight")
+    
+    connection.commit()
+    connection.close()
     
 if __name__ == "__main__":
     plot_account_value()
