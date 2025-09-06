@@ -82,7 +82,6 @@ def update_database(*, update_all: bool = False):
             else:
                 start_ts = int((datetime.now()-timedelta(days=730)).timestamp()*1000)
 
-            print(start_ts, end_ts)
             logger.info(f"{ticker}: range ({datetime.utcfromtimestamp(start_ts/1000)}, {datetime.utcfromtimestamp(end_ts/1000)})")
             
             count = 0

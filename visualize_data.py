@@ -1,4 +1,3 @@
-import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,31 +21,13 @@ def build_series(df: pd.DataFrame) -> pd.Series:
     return s
 
 def plot_account_value(db_path: str = DB_PATH):
-    parser = argparse.ArgumentParser(description="Plot per-ticker account value vs time with % on secondary axis.")
-    parser.add_argument("--file", type=str, default=db_path, help="Path to JSON data file (default from config).")
-    parser.add_argument("--tickers", type=str, nargs="*", default=None, help="Subset of tickers to plot (default: all in file or config.TICKERS).")
-    parser.add_argument("--mode", type=str, choices=["all", "common", "from-date"], default="all",
-                        help="Start mode: 'all' (each from own start), 'common' (earliest common), 'from-date' (use --date).")
-    parser.add_argument("--date", type=str, default=None, help="YYYY-MM-DD (UTC) when --mode=from-date.")
-    parser.add_argument("--title", type=str, default="Account Equity by Ticker", help="Plot title.")
-    parser.add_argument("--out", type=str, default=None, help="Optional output PNG path to save the figure.")
-    parser.add_argument("--show-percent-lines", action="store_true",
-                        help="Also draw percent-change lines on right axis (one per ticker).")
-
-    args = parser.parse_args()
-
-    connection = sqlite3.connect(DB_PATH)
+    connection = sqlite3.connect(db_path)
     cursor = connection.cursor()
 
     for timeframe in TIMEFRAMES:
         fig, ax = plt.subplots(layout='constrained')
 
-        if args.tickers:
-            tickers = args.tickers
-        else:
-            tickers = TICKERS
-
-        for ticker in tickers:
+        for ticker in TICKERS:
             data = cursor.execute("SELECT timestamp, account_value FROM signals WHERE ticker = ? AND timeframe = ? ORDER BY timestamp ASC", (ticker, timeframe)).fetchall()
             df = pd.DataFrame(data, columns=['timestamp', 'account_value'])
 
@@ -58,9 +39,10 @@ def plot_account_value(db_path: str = DB_PATH):
             
             ax.plot(plot_df.index, plot_df.values, label=ticker)
 
-        ax.set_title(args.title)
+        ax.set_title("Account Equity by Ticker")
         ax.set_xlabel("Date")
         ax.set_ylabel("Account Value")
+        ax.set_yscale("log")
         
         def dollar2percent(x):
             return (x / INIT_ACCOUNT_VALUE - 1) * 100
@@ -70,6 +52,9 @@ def plot_account_value(db_path: str = DB_PATH):
 
         secax = ax.secondary_yaxis("right", functions=(dollar2percent, percent2dollar))
         secax.set_ylabel("Percent Gain/Loss")
+        y_min, y_max = ax.get_ylim()
+        secax.set_ylim(dollar2percent(y_min), dollar2percent(y_max))
+        secax.set_yscale("linear")
 
         ax.legend()
         fig.savefig(f"account_value_{timeframe}.png", dpi=300, bbox_inches="tight")

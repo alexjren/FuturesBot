@@ -1,6 +1,11 @@
 /.env
 /account_value_1 day.png
 /account_value_30 minute.png
+/account_value_1 hour.png
+/account_value_15 minute.png
+/account_value_1 minute.png
+/account_value_5 minute.png
+/account_value_4 hour.png
 /data_handler.log
 /market.db
 /venv

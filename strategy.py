@@ -52,7 +52,8 @@ def calculate_signals(df, ticker):
         prev_pos        = out.at[prev_i, "position"]
         prev_stop       = out.at[prev_i, "stop_price"]
         prev_target     = out.at[prev_i, "target_price"]
-        prev_unit_size  = out.at[prev_i, "unit_size"]
+        # prev_unit_size  = out.at[prev_i, "unit_size"]
+        prev_unit_size = 1
         prev_position_basis = out.at[prev_i, "position_basis"]
         prev_account_value = out.at[prev_i, "account_value"]
 
