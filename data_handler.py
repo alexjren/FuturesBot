@@ -55,9 +55,45 @@ signals(
     position_basis  REAL,
     unit_size       INTEGER,
     account_value   REAL,
+    wins            REAL,
+    losses          REAL,
     PRIMARY KEY (ticker, timeframe, timestamp)
     FOREIGN KEY (ticker, timeframe, timestamp) REFERENCES bars(ticker, timeframe, timestamp)
 )"""
+
+def migrate_database(db_path: str = DB_PATH):
+    """
+    Checks and applies necessary database schema migrations to avoid deleting
+    the database file on schema changes.
+    """
+    # This function must be called *after* setup_logging()
+    logger.info("Checking for database migrations...")
+    connection = sqlite3.connect(db_path)
+    cursor = connection.cursor()
+
+    try:
+        # Check if 'signals' table exists before trying to alter it
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='signals'")
+        if cursor.fetchone() is None:
+            logger.info("'signals' table does not exist, will be created. No migration needed.")
+            return
+
+        # 'signals' table exists, check its columns
+        cursor.execute("PRAGMA table_info(signals)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        if "wins" not in columns:
+            logger.info("Applying migration: Adding 'wins' column to 'signals' table.")
+            cursor.execute("ALTER TABLE signals ADD COLUMN wins REAL")
+
+        if "losses" not in columns:
+            logger.info("Applying migration: Adding 'losses' column to 'signals' table.")
+            cursor.execute("ALTER TABLE signals ADD COLUMN losses REAL")
+
+    finally:
+        connection.commit()
+        connection.close()
+        logger.info("Database migration check complete.")
 
 def update_database(*, update_all: bool = False):
     client = RESTClient(API_KEY)
@@ -226,11 +262,11 @@ def update_signals(*, update_all: bool = False):
 
             for i, row in sig_df.iterrows():
                 cursor.execute("""  REPLACE INTO signals 
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", 
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", 
                                     (row["ticker"], row["timeframe"], row["timestamp"], 
                                     row["signal"], row["position"], row["entry_price"], 
                                     row["stop_price"], row["target_price"], row["position_basis"], 
-                                    row["unit_size"], row["account_value"])  
+                                    row["unit_size"], row["account_value"], row["wins"], row["losses"])  
                             )
                 count += 1
             logger.info(f"{ticker}: {count} signals calculated.")
@@ -251,6 +287,7 @@ def setup_logging() -> None:
 
 def refresh_data(*, update_all: bool = False, process_all: bool = False, signal_all: bool = False):
     setup_logging()
+    migrate_database()
     update_database(update_all=update_all)
     process_data(update_all=process_all)
     update_signals(update_all=signal_all)

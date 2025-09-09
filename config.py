@@ -60,5 +60,17 @@ COMMISSIONS = {
     "C:GBPUSD": 0.80,
     "C:USDJPY": 0.00,
     "C:JPYUSD": 0.80,
-    "I:NDX": 3.00,
+    "I:NDX": 0.91,
+}
+
+MARGIN = {
+    "QQQ": 600.00,
+    "SPY": 700.00,
+    "X:BTCUSD": 2868.00,
+    "X:ETHUSD": 151.00,
+    "C:EURUSD": 319.00,
+    "C:GBPUSD": 220.00,
+    "C:USDJPY": 341.00,
+    "C:JPYUSD": 341.00,
+    "I:NDX": 3361.00,
 }

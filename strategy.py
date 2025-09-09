@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from math import floor
-from config import DOLLAR_PER_POINT, RISK_PERCENT, INIT_ACCOUNT_VALUE, TICK_SIZE, COMMISSIONS
+from config import DOLLAR_PER_POINT, RISK_PERCENT, INIT_ACCOUNT_VALUE, TICK_SIZE, COMMISSIONS, MARGIN
 
 def calculate_signals(df, ticker):
     if df.empty:
@@ -27,6 +27,8 @@ def calculate_signals(df, ticker):
     out["position_basis"]  = np.nan   
     out["unit_size"]       = np.nan   
     out["account_value"] = np.nan
+    out["wins"] = np.nan
+    out["losses"] = np.nan
 
     first_idx = out.index[0]
     out.at[first_idx, "position"]        = 0.0
@@ -37,6 +39,8 @@ def calculate_signals(df, ticker):
     out.at[first_idx, "position_basis"]  = np.nan
     out.at[first_idx, "unit_size"]       = np.nan
     out.at[first_idx, "account_value"] = INIT_ACCOUNT_VALUE
+    out.at[first_idx, "wins"] = 0.0
+    out.at[first_idx, "losses"] = 0.0
 
     tick = TICK_SIZE[ticker]
     dollars_per_point = DOLLAR_PER_POINT[ticker]
@@ -52,10 +56,11 @@ def calculate_signals(df, ticker):
         prev_pos        = out.at[prev_i, "position"]
         prev_stop       = out.at[prev_i, "stop_price"]
         prev_target     = out.at[prev_i, "target_price"]
-        # prev_unit_size  = out.at[prev_i, "unit_size"]
-        prev_unit_size = 1
+        prev_unit_size  = out.at[prev_i, "unit_size"]
         prev_position_basis = out.at[prev_i, "position_basis"]
         prev_account_value = out.at[prev_i, "account_value"]
+        prev_wins = out.at[prev_i, "wins"]
+        prev_losses = out.at[prev_i, "losses"]
 
         out.at[cur_i, "position"]       = prev_pos
         out.at[cur_i, "signal"]         = "no_signal"
@@ -64,6 +69,8 @@ def calculate_signals(df, ticker):
         out.at[cur_i, "unit_size"]      = prev_unit_size
         out.at[cur_i, "position_basis"] = prev_position_basis
         out.at[cur_i, "account_value"] = prev_account_value
+        out.at[cur_i, "wins"] = prev_wins
+        out.at[cur_i, "losses"] = prev_losses
 
         if prev_pos == 1.0:
             low_bar  = out.at[cur_i, "low"]
@@ -73,7 +80,12 @@ def calculate_signals(df, ticker):
             target_hit = pd.notna(prev_target) and (high_bar >= prev_target)
 
             if stop_hit:
-                out.at[cur_i, "account_value"] = prev_account_value + (prev_stop - prev_position_basis) * prev_unit_size - 2*commissions*prev_unit_size - slippage
+                out.at[cur_i, "account_value"] = prev_account_value + (prev_stop - prev_position_basis) * prev_unit_size * dollars_per_point - 2*commissions*prev_unit_size - 2*slippage
+                if out.at[cur_i, "account_value"] > prev_account_value:
+                    out.at[cur_i, "wins"] = prev_wins + 1.0
+                elif out.at[cur_i, "account_value"] < prev_account_value:
+                    out.at[cur_i, "losses"] = prev_losses + 1.0
+
                 out.at[cur_i, "position"]       = 0.0
                 out.at[cur_i, "signal"]         = "close"
                 out.at[cur_i, "stop_price"]     = np.nan
@@ -82,7 +94,12 @@ def calculate_signals(df, ticker):
                 out.at[cur_i, "unit_size"]      = np.nan
                 continue
             elif target_hit:
-                out.at[cur_i, "account_value"] = prev_account_value + (prev_target - prev_position_basis) * prev_unit_size - 2*commissions*prev_unit_size - slippage
+                out.at[cur_i, "account_value"] = prev_account_value + (prev_target - prev_position_basis) * prev_unit_size * dollars_per_point - 2*commissions*prev_unit_size - 2*slippage
+                if out.at[cur_i, "account_value"] > prev_account_value:
+                    out.at[cur_i, "wins"] = prev_wins + 1.0
+                elif out.at[cur_i, "account_value"] < prev_account_value:
+                    out.at[cur_i, "losses"] = prev_losses + 1.0
+
                 out.at[cur_i, "position"]       = 0.0
                 out.at[cur_i, "signal"]         = "close"
                 out.at[cur_i, "stop_price"]     = np.nan
@@ -99,7 +116,12 @@ def calculate_signals(df, ticker):
             target_hit = pd.notna(prev_target) and (low_bar <= prev_target)
 
             if stop_hit:
-                out.at[cur_i, "account_value"] = prev_account_value - (prev_stop - prev_position_basis) * prev_unit_size * dollars_per_point - 2*commissions*prev_unit_size - slippage
+                out.at[cur_i, "account_value"] = prev_account_value - (prev_stop - prev_position_basis) * prev_unit_size * dollars_per_point - 2*commissions*prev_unit_size - 2*slippage
+                if out.at[cur_i, "account_value"] > prev_account_value:
+                    out.at[cur_i, "wins"] = prev_wins + 1.0
+                elif out.at[cur_i, "account_value"] < prev_account_value:
+                    out.at[cur_i, "losses"] = prev_losses + 1.0
+
                 out.at[cur_i, "position"]       = 0.0
                 out.at[cur_i, "signal"]         = "close"
                 out.at[cur_i, "stop_price"]     = np.nan
@@ -108,7 +130,12 @@ def calculate_signals(df, ticker):
                 out.at[cur_i, "unit_size"]      = np.nan
                 continue
             elif target_hit:
-                out.at[cur_i, "account_value"] = prev_account_value - (prev_target - prev_position_basis) * prev_unit_size * dollars_per_point - 2*commissions*prev_unit_size - slippage
+                out.at[cur_i, "account_value"] = prev_account_value - (prev_target - prev_position_basis) * prev_unit_size * dollars_per_point - 2*commissions*prev_unit_size - 2*slippage
+                if out.at[cur_i, "account_value"] > prev_account_value:
+                    out.at[cur_i, "wins"] = prev_wins + 1.0
+                elif out.at[cur_i, "account_value"] < prev_account_value:
+                    out.at[cur_i, "losses"] = prev_losses + 1.0
+
                 out.at[cur_i, "position"]       = 0.0
                 out.at[cur_i, "signal"]         = "close"
                 out.at[cur_i, "stop_price"]     = np.nan
@@ -168,7 +195,7 @@ def calculate_signals(df, ticker):
 
                 risk_points = abs(planned_entry_L - planned_stop_L)
                 if risk_points > 0 and dollars_per_point > 0:
-                    planned_units_L = floor((RISK_PERCENT * prev_account_value) / (risk_points * dollars_per_point))
+                    planned_units_L = min(floor((RISK_PERCENT * prev_account_value) / (risk_points * dollars_per_point)), floor(prev_account_value/MARGIN[ticker]))
                 else:
                     planned_units_L = 0
 
@@ -191,7 +218,7 @@ def calculate_signals(df, ticker):
 
                 risk_points = abs(planned_entry_S - planned_stop_S)
                 if risk_points > 0 and dollars_per_point > 0:
-                    planned_units_S = floor((RISK_PERCENT * prev_account_value) / (risk_points * dollars_per_point))
+                    planned_units_S = min(floor((RISK_PERCENT * prev_account_value) / (risk_points * dollars_per_point)), floor(prev_account_value/MARGIN[ticker]))
                 else:
                     planned_units_S = 0
 

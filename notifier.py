@@ -16,16 +16,27 @@ def build_discord_message(db_path: str = DB_PATH):
     messages = []
     for timeframe in TIMEFRAMES:
         for ticker in TICKERS:
-            last_ts = cursor.execute(f"SELECT MAX(timestamp) FROM signals WHERE ticker = ? AND timeframe = ?", (ticker, timeframe)).fetchone()[0]
-            signal = cursor.execute("SELECT signal, entry_price, stop_price, target_price FROM signals WHERE ticker = ? AND timeframe = ? AND timestamp = ?", (ticker, timeframe, last_ts)).fetchone()
-            sig = (signal[0] or "").strip().lower()
-            entry = signal[1]
-            stop = signal[2]
-            targ = signal[3]
+            last_ts_row = cursor.execute(f"SELECT MAX(timestamp) FROM signals WHERE ticker = ? AND timeframe = ?", (ticker, timeframe)).fetchone()
+            if not last_ts_row or last_ts_row[0] is None:
+                messages.append(f"**{ticker}**, {timeframe}: No signals found.")
+                continue
+            last_ts = last_ts_row[0]
+            signal_data = cursor.execute("SELECT signal, entry_price, stop_price, target_price, wins, losses FROM signals WHERE ticker = ? AND timeframe = ? AND timestamp = ?", (ticker, timeframe, last_ts)).fetchone()
+            sig = (signal_data[0] or "").strip().lower()
+            entry = signal_data[1]
+            stop = signal_data[2]
+            targ = signal_data[3]
+            wins = signal_data[4]
+            losses = signal_data[5]
+            total_trades = wins + losses
+            win_rate_str = "n/a"
+            if total_trades > 0:
+                win_rate_str = _fmt(wins / total_trades)
+
             if sig in ("long", "short") and pd.notna(entry):
-                messages.append(f"**{ticker}**, {timeframe}: {sig.capitalize()} at {_fmt(entry)}, stop {_fmt(stop)}, target {_fmt(targ)}")
+                messages.append(f"**{ticker}**, {timeframe}: {sig.capitalize()} at {_fmt(entry)}, stop {_fmt(stop)}, target {_fmt(targ)}, current win rate {win_rate_str} with {total_trades} total trades.")
             else:
-                messages.append(f"**{ticker}**, {timeframe}: No signal for next bar")
+                messages.append(f"**{ticker}**, {timeframe}: No signal for next bar. Current win rate {win_rate_str} with {total_trades} total trades.")
     connection.close()
     return messages
 
